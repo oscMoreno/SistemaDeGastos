@@ -15,7 +15,7 @@ PWA mobile-first para el control financiero de un restaurante. Reemplaza un Exce
 - **Estilos:** Tailwind CSS v4 (mobile-first)
 - **Gráficas:** Recharts
 - **Backend:** Firebase Web SDK v10+ (Auth, Firestore, Storage)
-- **IA:** Google Gemini 1.5 Flash (via `/api/scan-receipt` server-side route)
+- **IA:** Mistral AI `pixtral-12b-2409` (via `/api/scan-receipt` server-side route)
 - **PWA:** manifest.json manual (next-pwa incompatible con Turbopack)
 
 ---
@@ -28,10 +28,10 @@ src/
 │   ├── layout.tsx                  # Root layout: AuthProvider + PWA meta tags
 │   ├── page.tsx                    # Redirect → /dashboard
 │   ├── globals.css                 # Tailwind base
-│   ├── api/scan-receipt/route.ts   # Gemini API server-side (protege la API key)
+│   ├── api/scan-receipt/route.ts   # Mistral API server-side (protege la API key)
 │   ├── (auth)/login/page.tsx       # Login sin bottom nav
 │   └── (app)/                      # Rutas protegidas con AuthGuard + BottomNav
-│       ├── layout.tsx
+│       ├── layout.tsx              # DataProvider + cleanupExpiredImages()
 │       ├── dashboard/page.tsx
 │       ├── ingresos/page.tsx + nuevo/page.tsx
 │       ├── egresos/page.tsx + nuevo/page.tsx
@@ -49,7 +49,7 @@ src/
 │   ├── firebase/     # config.ts, auth.ts, firestore.ts, storage.ts
 │   └── utils/        # constants.ts, dates.ts
 ├── hooks/            # useIngresos, useEgresos, useDashboardStats
-├── context/          # AuthContext.tsx
+├── context/          # AuthContext.tsx, DataContext.tsx
 └── types/            # index.ts (todas las interfaces)
 ```
 
@@ -100,12 +100,20 @@ Para agregar proveedores o empleados: editar **únicamente** `src/lib/utils/cons
   semana: number;
   mes: string;
   anio: number;
-  imagen_url?: string;  // Firebase Storage URL del recibo
+  imagen_url?: string;  // Firebase Storage URL del recibo (se borra a los 30 días)
   notas?: string;
 }
 ```
 
 **Regla invariante:** Los campos `semana`, `mes`, `anio` SIEMPRE se calculan en tiempo de escritura usando `src/lib/utils/dates.ts`. Nunca derivarlos en queries.
+
+### Índices compuestos (ya creados en Firebase Console)
+
+| Colección | Campos | Orden |
+|-----------|--------|-------|
+| `ingresos` | `anio` ASC, `fecha` DESC | Ascending / Descending |
+| `egresos` | `anio` ASC, `fecha` DESC | Ascending / Descending |
+| `egresos` | `anio` ASC, `categoria` ASC, `fecha` DESC | — |
 
 ---
 
@@ -122,8 +130,8 @@ NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
 NEXT_PUBLIC_FIREBASE_APP_ID=
 
-# Gemini AI — server-side ONLY (sin prefijo NEXT_PUBLIC_)
-GEMINI_API_KEY=
+# Mistral AI — server-side ONLY (sin prefijo NEXT_PUBLIC_)
+MISTRAL_API_KEY=
 ```
 
 ---
@@ -149,7 +157,7 @@ export function getFirebaseAuth() {
 
 // src/lib/firebase/firestore.ts
 function getDb() {
-  return getFirestore(getFirebaseApp());
+  return getFirestore(getFirebaseApp()); // simple — sin opciones, sin persistentLocalCache
 }
 ```
 
@@ -164,7 +172,11 @@ useEffect(() => {
 }, []);
 ```
 
-### 2. Rutas Protegidas — `force-dynamic`
+### 2. `persistentLocalCache` — PROHIBIDO
+
+**NUNCA** usar `initializeFirestore` con `persistentLocalCache`. Causa que la app muestre la URL cruda del stream de Firestore (`gsessionid=...&VER=8&TYPE=xmlhttp`) en lugar de renderizar la UI. `getDb()` debe ser siempre `return getFirestore(getFirebaseApp())` sin opciones.
+
+### 3. Rutas Protegidas — `force-dynamic`
 
 Toda página en `(app)/` y `(auth)/` debe tener:
 ```typescript
@@ -172,13 +184,13 @@ export const dynamic = 'force-dynamic';
 ```
 Esto previene pre-rendering estático que dispara Firebase en build time.
 
-### 3. Seguridad de API Keys
+### 4. Seguridad de API Keys
 
-- `GEMINI_API_KEY` solo se lee en `src/app/api/scan-receipt/route.ts` (server-side)
-- El cliente NUNCA tiene acceso a la key de Gemini
+- `MISTRAL_API_KEY` solo se lee en `src/app/api/scan-receipt/route.ts` (server-side)
+- El cliente NUNCA tiene acceso a la key de Mistral
 - Las Firebase client keys (`NEXT_PUBLIC_*`) sí son seguras en el browser
 
-### 4. Componentes UI
+### 5. Componentes UI
 
 Siempre usar los átomos de `src/components/ui/`:
 - `Button` — variantes: `primary` (emerald), `secondary`, `danger` (rose), `ghost`
@@ -189,23 +201,26 @@ Siempre usar los átomos de `src/components/ui/`:
 - `Badge` — para categorías/métodos de pago con colores de `constants.ts`
 - `Spinner` — loading states
 
-### 5. Formularios
+### 6. Formularios
 
 - `EgresoForm` acepta `initialValues` opcional para pre-llenado desde el scanner
 - `SubcategoriaSelect` se re-renderiza automáticamente cuando cambia `categoria`
 - Siempre usar `dateToInputValue(new Date())` como valor inicial de fecha
 - Guardar con `addIngreso()`/`addEgreso()` pasando `fechaStr: string` (formato `YYYY-MM-DD`)
 
-### 6. Hooks de Datos
+### 7. Hooks de Datos y DataContext
 
-Los hooks usan `onSnapshot` (tiempo real):
+`DataContext` (`src/context/DataContext.tsx`) inicia los listeners de Firestore una sola vez al autenticarse, en `(app)/layout.tsx`. Todas las páginas consumen datos compartidos vía `useData()` — sin re-fetch por página.
+
 ```typescript
-const { ingresos, loading } = useIngresos(anio?); // default: año actual
+const { ingresos, loading } = useIngresos(anio?); // usa DataContext si anio == año actual
 const { egresos, loading } = useEgresos(anio?);
 const stats = useDashboardStats(ingresos, egresos); // derivado, sin fetch
 ```
 
-### 7. Colores del Sistema
+`useIngresos`/`useEgresos` usan `DataContext` para el año actual; caen a `subscribeToX` directo para otros años.
+
+### 8. Colores del Sistema
 
 | Tipo | Color |
 |------|-------|
@@ -218,21 +233,21 @@ const stats = useDashboardStats(ingresos, egresos); // derivado, sin fetch
 | Sueldos | `purple` |
 | Gastos Fijos | `amber` |
 
-### 8. Mobile-First
+### 9. Mobile-First
 
 - Mínimo `min-h-[44px]` / `min-w-[44px]` en todos los elementos táctiles
 - BottomNav ocupa `h-16` → contenido con `pb-20` en el layout
 - `safe-area-inset-bottom` en el BottomNav para iPhone
 - Tailwind v4: usar clases `min-h-11` / `min-w-11` equivalente a `44px`
 
-### 9. Tipos TypeScript
+### 10. Tipos TypeScript
 
 Todos los tipos en `src/types/index.ts`. No crear interfaces locales en componentes. Usar los tipos exportados:
 ```typescript
 import type { Ingreso, Egreso, MetodoPago, CategoriaEgreso, GeminiReceiptResult } from '@/types';
 ```
 
-### 10. Constantes del Negocio
+### 11. Constantes del Negocio
 
 Siempre importar de `src/lib/utils/constants.ts`:
 ```typescript
@@ -248,8 +263,9 @@ Usuario toma foto
   → ImageUploader (capture="environment")
   → uploadReceiptImage() → Firebase Storage → downloadURL
   → POST /api/scan-receipt { base64Image, mimeType }
-      → Gemini 1.5 Flash analiza imagen
+      → Mistral pixtral-12b-2409 analiza imagen
       → Retorna JSON: { monto, subcategoria, notas, fecha }
+      → JSON limpiado con regex: .replace(/:(\s*)([\d.]+)\s+[a-zA-Záéíóú]+/g, ':$1$2')
   → ScannerResult: campos editables pre-llenados
   → Usuario confirma
   → addEgreso({ ...parsed, imagen_url: downloadURL })
@@ -258,14 +274,41 @@ Usuario toma foto
 Error: → ScannerStatus error → botón "Ingresar manualmente" → /egresos/nuevo
 ```
 
+**IMPORTANTE:** La IA es Mistral AI, NO Gemini. Gemini fue abandonado porque la política de la organización de Google bloquea todos los tipos de API key (los tokens OAuth `AQ.` devuelven `ACCESS_TOKEN_TYPE_UNSUPPORTED`; las service account JWTs devuelven `API_KEY_SERVICE_BLOCKED`; Vertex AI requiere billing deshabilitado). No intentar volver a Gemini.
+
+---
+
+## Auto-delete de Imágenes de Recibos
+
+`cleanupExpiredImages()` en `firestore.ts` se ejecuta client-side, fire-and-forget, una vez cada 24h (throttle vía `localStorage`). Se dispara desde `(app)/layout.tsx` cuando el usuario se autentica.
+
+- Queries `egresos` para `anio == año actual` y `anio == año anterior`
+- Filtra en memoria: `fecha < hace 30 días AND imagen_url existe`
+- Borra el archivo de Firebase Storage via `deleteStorageFile(imagen_url)`
+- Limpia el campo `imagen_url` con `deleteField()` — **los datos financieros del egreso se conservan**
+
+Path de storage derivado de la URL sin cambios de schema:
+```
+decodeURIComponent(url.split('/o/')[1].split('?')[0])
+```
+
+---
+
+## Dashboard — Filtro Mensual
+
+El dashboard tiene toggle `viewMode: 'semana' | 'mes'`:
+
+- **Modo semana:** SummaryCards muestra stats de la semana actual, WeeklyChart visible
+- **Modo mes:** selector horizontal de pills con los 12 meses, SummaryCards muestra totales del mes seleccionado desde `stats.monthlyTotals`, WeeklyChart oculto
+
+`SummaryCards` acepta prop `label?: string` para mostrar el período encima de las cards.
+
 ---
 
 ## Qué Falta por Implementar
 
 ### Pendiente (alta prioridad)
-1. **Iconos PWA** — Faltan los archivos `public/icon-192x192.png` y `public/icon-512x512.png`. Sin ellos el PWA no se puede instalar en móvil. Crear con fondo emerald-600 (#059669) y símbolo de peso "$".
-2. **Índices de Firestore** — Al hacer la primera query combinada (`anio` + `orderBy fecha`), Firestore pedirá crear índices. Crearlos en Firebase Console o via `firestore.indexes.json`.
-3. **Reglas de seguridad de Firebase** — Aplicar en Firebase Console:
+1. **Reglas de seguridad de Firebase** — Aplicar en Firebase Console:
    ```
    // Firestore
    match /{collection}/{docId} {
@@ -278,13 +321,14 @@ Error: → ScannerStatus error → botón "Ingresar manualmente" → /egresos/nu
    ```
 
 ### Pendiente (funcionalidad adicional)
-4. **Editar registros** — No hay edición, solo agregar/eliminar. Agregar ruta `/ingresos/[id]/editar` y `/egresos/[id]/editar`.
-5. **Exportar a Excel/CSV** — El dueño necesita reportes semanales para llevar al contador.
-6. **Notificaciones de presupuesto** — Alertar cuando los egresos superan un umbral semanal configurado.
-7. **Múltiples años** — `useIngresos`/`useEgresos` actualmente solo cargan el año actual. Agregar selector de año en historial.
-8. **Resumen semanal** — Vista dedicada semana-por-semana con desglose por categoría (similar al Excel original).
-9. **Toast/feedback visual** — No hay notificación de éxito al guardar. Implementar toast notifications.
-10. **Service Worker offline** — next-pwa no funciona con Turbopack. Implementar SW manual en `public/sw.js` para cache offline.
+2. **Editar registros** — No hay edición, solo agregar/eliminar. Agregar ruta `/ingresos/[id]/editar` y `/egresos/[id]/editar`.
+3. **Exportar a Excel/CSV** — El dueño necesita reportes semanales para llevar al contador.
+4. **Notificaciones de presupuesto** — Alertar cuando los egresos superan un umbral semanal configurado.
+5. **Múltiples años** — Agregar selector de año en historial.
+6. **Resumen semanal** — Vista dedicada semana-por-semana con desglose por categoría (similar al Excel original).
+7. **Toast/feedback visual** — No hay notificación de éxito al guardar. Implementar toast notifications.
+8. **Service Worker offline** — next-pwa no funciona con Turbopack. Implementar SW manual en `public/sw.js` para cache offline.
+9. **Deploy en Vercel** — No desplegado aún. Requiere configurar las variables de entorno en Vercel dashboard.
 
 ---
 
@@ -300,21 +344,10 @@ npm run lint     # ESLint
 
 ---
 
-## Reglas de Firestore (Índices necesarios)
-
-Las queries usan `where('anio', '==', X)` + `orderBy('fecha', 'desc')`. Firestore requiere índices compuestos para esto. Crear en Firebase Console:
-
-| Colección | Campos | Orden |
-|-----------|--------|-------|
-| `ingresos` | `anio` ASC, `fecha` DESC | Ascending / Descending |
-| `egresos` | `anio` ASC, `fecha` DESC | Ascending / Descending |
-| `egresos` | `anio` ASC, `categoria` ASC, `fecha` DESC | — |
-
----
-
 ## Notas de Arquitectura
 
 - **Route groups:** `(auth)` para login (sin nav), `(app)` para rutas protegidas (con AuthGuard + BottomNav)
 - **`EgresoForm` es shared:** lo usan `/egresos/nuevo` (manual) Y `/scanner` (pre-llenado con IA). La prop `initialValues` es el puente.
 - **No hay middleware Edge** — la protección de rutas es client-side en `(app)/layout.tsx` con `useAuth()`. Suficiente para app single-admin.
 - **Recharts necesita `'use client'`** — todos los componentes de gráficas son client components.
+- **`DataContext`** en `(app)/layout.tsx` — inicia ambos listeners de Firestore al autenticarse, evita re-fetch por navegación entre páginas.

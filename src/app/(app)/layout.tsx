@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import { DataProvider } from '@/context/DataContext';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { Spinner } from '@/components/ui/Spinner';
 import { cleanupExpiredImages } from '@/lib/firebase/firestore';
@@ -32,9 +33,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen pb-20 bg-slate-50">
-      {children}
-      <BottomNav />
-    </div>
+    <DataProvider>
+      <div className="min-h-screen pb-20 bg-slate-50">
+        {children}
+        <BottomNav />
+      </div>
+    </DataProvider>
   );
 }

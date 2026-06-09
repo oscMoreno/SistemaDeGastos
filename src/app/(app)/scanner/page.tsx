@@ -10,9 +10,8 @@ import { ScannerStatus } from '@/components/scanner/ScannerStatus';
 import { ScannerResult } from '@/components/scanner/ScannerResult';
 import { uploadReceiptImage } from '@/lib/firebase/storage';
 import { addEgreso } from '@/lib/firebase/firestore';
-import { getMes, getAnio, getWeekNumber } from '@/lib/utils/dates';
+import { scanReceipt } from '@/lib/firebase/ai';
 import type { GeminiReceiptResult, CategoriaEgreso } from '@/types';
-import { Timestamp } from 'firebase/firestore';
 
 type ScanStep = 'idle' | 'uploading' | 'scanning' | 'confirming' | 'saving' | 'error';
 
@@ -50,23 +49,13 @@ export default function ScannerPage() {
     try {
       const base64 = preview.split(',')[1];
       const mimeType = file.type || 'image/jpeg';
-
-      const res = await fetch('/api/scan-receipt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base64Image: base64, mimeType }),
-      });
-
-      if (!res.ok) throw new Error('scan failed');
-      const result: GeminiReceiptResult = await res.json();
+      const result = await scanReceipt(base64, mimeType);
       setScanResult(result);
       setStep('confirming');
     } catch {
       setStep('error');
       setErrorMsg('No se pudo leer el recibo. Puedes ingresar los datos manualmente.');
     }
-
-    void url;
   }
 
   async function handleConfirm(confirmed: GeminiReceiptResult & { categoria: CategoriaEgreso }) {

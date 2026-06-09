@@ -5,10 +5,15 @@ interface SummaryCardsProps {
   ingresos: number;
   egresos: number;
   utilidad: number;
+  label?: string;
 }
 
-export function SummaryCards({ ingresos, egresos, utilidad }: SummaryCardsProps) {
+export function SummaryCards({ ingresos, egresos, utilidad, label }: SummaryCardsProps) {
   return (
+    <div>
+      {label && (
+        <p className="text-xs text-gray-400 px-4 pt-3 pb-1 uppercase tracking-wide font-medium">{label}</p>
+      )}
     <div className="grid grid-cols-3 gap-3 px-4 py-3">
       <Card className="text-center">
         <p className="text-xs text-gray-500 mb-1">Ingresos</p>
@@ -24,6 +29,7 @@ export function SummaryCards({ ingresos, egresos, utilidad }: SummaryCardsProps)
           {formatCurrency(utilidad)}
         </p>
       </Card>
+    </div>
     </div>
   );
 }

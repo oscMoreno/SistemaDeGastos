@@ -9,11 +9,15 @@ import {
   orderBy,
   Timestamp,
   onSnapshot,
+  getDocs,
+  updateDoc,
+  deleteField,
   type Query,
   type DocumentData,
   type QueryConstraint,
 } from 'firebase/firestore';
 import { getFirebaseApp } from './config';
+import { deleteStorageFile } from './storage';
 import type { Ingreso, Egreso } from '@/types';
 import { getWeekNumber, getMes, getAnio } from '@/lib/utils/dates';
 
@@ -79,6 +83,33 @@ export function subscribeToIngresos(
     const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Ingreso));
     callback(data);
   });
+}
+
+export async function cleanupExpiredImages(): Promise<void> {
+  try {
+    const db = getDb();
+    const cutoff = Timestamp.fromMillis(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const year = new Date().getFullYear();
+    const [snapA, snapB] = await Promise.all([
+      getDocs(query(collection(db, 'egresos'), where('anio', '==', year), orderBy('fecha', 'desc'))),
+      getDocs(query(collection(db, 'egresos'), where('anio', '==', year - 1), orderBy('fecha', 'desc'))),
+    ]);
+    const expired: { id: string; imagen_url: string }[] = [];
+    for (const snap of [snapA, snapB]) {
+      snap.docs.forEach((d) => {
+        const data = d.data();
+        if (data.imagen_url && (data.fecha as Timestamp).toMillis() < cutoff.toMillis()) {
+          expired.push({ id: d.id, imagen_url: data.imagen_url as string });
+        }
+      });
+    }
+    await Promise.allSettled(
+      expired.map(async ({ id, imagen_url }) => {
+        try { await deleteStorageFile(imagen_url); } catch { /* ya borrado */ }
+        await updateDoc(doc(db, 'egresos', id), { imagen_url: deleteField() });
+      })
+    );
+  } catch { /* silent */ }
 }
 
 export function subscribeToEgresos(

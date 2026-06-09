@@ -1,6 +1,6 @@
 'use client';
 
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getFirebaseApp } from './config';
 import { getFirebaseAuth } from './auth';
 
@@ -18,4 +18,14 @@ export async function uploadReceiptImage(file: File): Promise<{ downloadURL: str
   await uploadBytes(storageRef, file);
   const downloadURL = await getDownloadURL(storageRef);
   return { downloadURL, storagePath };
+}
+
+export function getStoragePathFromUrl(imageUrl: string): string {
+  return decodeURIComponent(imageUrl.split('/o/')[1].split('?')[0]);
+}
+
+export async function deleteStorageFile(imageUrl: string): Promise<void> {
+  const storage = getStorage(getFirebaseApp());
+  const path = getStoragePathFromUrl(imageUrl);
+  await deleteObject(ref(storage, path));
 }

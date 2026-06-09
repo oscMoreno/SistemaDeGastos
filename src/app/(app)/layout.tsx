@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { Spinner } from '@/components/ui/Spinner';
+import { cleanupExpiredImages } from '@/lib/firebase/firestore';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -15,6 +16,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
   }, [user, loading, router]);
+
+  useEffect(() => {
+    if (user) { cleanupExpiredImages(); }
+  }, [user]);
 
   if (loading) {
     return (

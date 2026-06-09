@@ -2,6 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useIngresos } from '@/hooks/useIngresos';
 import { useEgresos } from '@/hooks/useEgresos';
@@ -11,17 +12,31 @@ import { WeeklyChart } from '@/components/dashboard/WeeklyChart';
 import { PaymentMethodBreakdown } from '@/components/dashboard/PaymentMethodBreakdown';
 import { MonthlyTotals } from '@/components/dashboard/MonthlyTotals';
 import { Spinner } from '@/components/ui/Spinner';
-import { getCurrentWeek, getCurrentYear } from '@/lib/utils/dates';
+import { getCurrentWeek, getCurrentYear, getMes } from '@/lib/utils/dates';
+import { MESES } from '@/lib/utils/constants';
 import { signOut } from '@/lib/firebase/auth';
 import { useRouter } from 'next/navigation';
 
+type ViewMode = 'semana' | 'mes';
+
 export default function DashboardPage() {
+  const [viewMode, setViewMode] = useState<ViewMode>('semana');
+  const [selectedMes, setSelectedMes] = useState<string>(getMes(new Date()));
+
   const { ingresos, loading: loadingI } = useIngresos();
   const { egresos, loading: loadingE } = useEgresos();
   const stats = useDashboardStats(ingresos, egresos);
   const router = useRouter();
 
   const loading = loadingI || loadingE;
+
+  const mesStats = stats.monthlyTotals.find((m) => m.mes === selectedMes) ?? {
+    ingresos: 0, egresos: 0, utilidad: 0,
+  };
+
+  const periodoStats = viewMode === 'mes'
+    ? { ingresos: mesStats.ingresos, egresos: mesStats.egresos, utilidad: mesStats.utilidad }
+    : { ingresos: stats.currentWeekIngresos, egresos: stats.currentWeekEgresos, utilidad: stats.utilidad };
 
   async function handleSignOut() {
     await signOut();
@@ -45,22 +60,63 @@ export default function DashboardPage() {
         </button>
       </header>
 
+      {/* Toggle semana / mes */}
+      <div className="flex gap-2 px-4 pt-3 pb-1">
+        <button
+          onClick={() => setViewMode('semana')}
+          className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${
+            viewMode === 'semana'
+              ? 'bg-emerald-600 text-white'
+              : 'bg-gray-100 text-gray-500'
+          }`}
+        >
+          Esta semana
+        </button>
+        <button
+          onClick={() => setViewMode('mes')}
+          className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${
+            viewMode === 'mes'
+              ? 'bg-emerald-600 text-white'
+              : 'bg-gray-100 text-gray-500'
+          }`}
+        >
+          Por mes
+        </button>
+      </div>
+
+      {/* Selector de mes */}
+      {viewMode === 'mes' && (
+        <div className="flex gap-2 px-4 py-2 overflow-x-auto scrollbar-hide">
+          {MESES.map((mes) => (
+            <button
+              key={mes}
+              onClick={() => setSelectedMes(mes)}
+              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                selectedMes === mes
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-white text-gray-600 border border-gray-200'
+              }`}
+            >
+              {mes.slice(0, 3)}
+            </button>
+          ))}
+        </div>
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <Spinner size="lg" />
         </div>
       ) : (
         <>
-          <div className="pt-1">
-            <p className="text-xs text-gray-400 px-4 pt-3 pb-1 uppercase tracking-wide font-medium">Esta semana</p>
-            <SummaryCards
-              ingresos={stats.currentWeekIngresos}
-              egresos={stats.currentWeekEgresos}
-              utilidad={stats.utilidad}
-            />
-          </div>
+          <SummaryCards
+            ingresos={periodoStats.ingresos}
+            egresos={periodoStats.egresos}
+            utilidad={periodoStats.utilidad}
+            label={viewMode === 'semana' ? `Semana ${getCurrentWeek()}` : selectedMes}
+          />
 
-          <WeeklyChart data={stats.weeklyChartData} />
+          {viewMode === 'semana' && <WeeklyChart data={stats.weeklyChartData} />}
           <PaymentMethodBreakdown data={stats.paymentMethodData} />
           <MonthlyTotals data={stats.monthlyTotals} />
 

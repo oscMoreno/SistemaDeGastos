@@ -1,4 +1,6 @@
 import {
+  initializeFirestore,
+  persistentLocalCache,
   getFirestore,
   collection,
   addDoc,
@@ -21,8 +23,17 @@ import { deleteStorageFile } from './storage';
 import type { Ingreso, Egreso } from '@/types';
 import { getWeekNumber, getMes, getAnio } from '@/lib/utils/dates';
 
+let _db: ReturnType<typeof getFirestore> | null = null;
 function getDb() {
-  return getFirestore(getFirebaseApp());
+  if (_db) return _db;
+  try {
+    _db = initializeFirestore(getFirebaseApp(), {
+      localCache: persistentLocalCache(),
+    });
+  } catch {
+    _db = getFirestore(getFirebaseApp());
+  }
+  return _db;
 }
 
 function computeDateFields(dateStr: string) {
@@ -86,6 +97,10 @@ export function subscribeToIngresos(
 }
 
 export async function cleanupExpiredImages(): Promise<void> {
+  const STORAGE_KEY = 'last_img_cleanup';
+  const last = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
+  if (last && Number(last) > Date.now() - 24 * 60 * 60 * 1000) return;
+  if (typeof window !== 'undefined') localStorage.setItem(STORAGE_KEY, String(Date.now()));
   try {
     const db = getDb();
     const cutoff = Timestamp.fromMillis(Date.now() - 30 * 24 * 60 * 60 * 1000);

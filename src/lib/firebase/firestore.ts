@@ -1,6 +1,4 @@
 import {
-  initializeFirestore,
-  persistentLocalCache,
   getFirestore,
   collection,
   addDoc,
@@ -23,17 +21,8 @@ import { deleteStorageFile } from './storage';
 import type { Ingreso, Egreso } from '@/types';
 import { getWeekNumber, getMes, getAnio } from '@/lib/utils/dates';
 
-let _db: ReturnType<typeof getFirestore> | null = null;
 function getDb() {
-  if (_db) return _db;
-  try {
-    _db = initializeFirestore(getFirebaseApp(), {
-      localCache: persistentLocalCache(),
-    });
-  } catch {
-    _db = getFirestore(getFirebaseApp());
-  }
-  return _db;
+  return getFirestore(getFirebaseApp());
 }
 
 function computeDateFields(dateStr: string) {
@@ -96,6 +85,17 @@ export function subscribeToIngresos(
   });
 }
 
+export function subscribeToEgresos(
+  filters: { anio: number },
+  callback: (data: Egreso[]) => void
+) {
+  const q = egresosQuery(filters);
+  return onSnapshot(q, (snapshot) => {
+    const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Egreso));
+    callback(data);
+  });
+}
+
 export async function cleanupExpiredImages(): Promise<void> {
   const STORAGE_KEY = 'last_img_cleanup';
   const last = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
@@ -125,15 +125,4 @@ export async function cleanupExpiredImages(): Promise<void> {
       })
     );
   } catch { /* silent */ }
-}
-
-export function subscribeToEgresos(
-  filters: { anio: number },
-  callback: (data: Egreso[]) => void
-) {
-  const q = egresosQuery(filters);
-  return onSnapshot(q, (snapshot) => {
-    const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Egreso));
-    callback(data);
-  });
 }

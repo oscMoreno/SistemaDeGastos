@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { SubcategoriaSelect } from '@/components/egresos/SubcategoriaSelect';
-import { CATEGORIAS_EGRESO, SUBCATEGORIAS } from '@/lib/utils/constants';
+import { CATEGORIAS_EGRESO } from '@/lib/utils/constants';
+import { useData } from '@/context/DataContext';
 import { dateToInputValue } from '@/lib/utils/dates';
 import type { CategoriaEgreso, GeminiReceiptResult } from '@/types';
 
@@ -17,19 +18,40 @@ interface ScannerResultProps {
   loading?: boolean;
 }
 
+interface FieldErrors {
+  fecha?: string;
+  monto?: string;
+  subcategoria?: string;
+}
+
 export function ScannerResult({ result, imagePreview, onConfirm, onCancel, loading }: ScannerResultProps) {
+  const { subcategorias } = useData();
   const [fecha, setFecha] = useState(result.fecha || dateToInputValue(new Date()));
   const [categoria, setCategoria] = useState<CategoriaEgreso>('Gastos Insumos');
-  const [subcategoria, setSubcategoria] = useState(
-    SUBCATEGORIAS['Gastos Insumos'].includes(result.subcategoria)
+  const [subcategoria, setSubcategoria] = useState(() =>
+    subcategorias['Gastos Insumos'].includes(result.subcategoria)
       ? result.subcategoria
-      : SUBCATEGORIAS['Gastos Insumos'][0]
+      : subcategorias['Gastos Insumos'][0]
   );
   const [monto, setMonto] = useState(result.monto?.toString() ?? '');
   const [notas, setNotas] = useState(result.notas ?? '');
+  const [errors, setErrors] = useState<FieldErrors>({});
+
+  // Valor efectivo derivado: si la subcategoría no existe en la lista actual
+  // (cambió la categoría o se eliminó el nombre), usar la primera.
+  const lista = subcategorias[categoria] ?? [];
+  const subcategoriaEfectiva = lista.includes(subcategoria) ? subcategoria : (lista[0] ?? '');
 
   function handleConfirm() {
-    onConfirm({ fecha, subcategoria, monto: Number(monto), notas, categoria });
+    const errs: FieldErrors = {};
+    if (!fecha) errs.fecha = 'La fecha es obligatoria.';
+    if (!monto.trim()) errs.monto = 'El monto es obligatorio. Revisa el recibo y captúralo.';
+    else if (isNaN(Number(monto)) || Number(monto) <= 0) errs.monto = 'El monto debe ser un número mayor a 0.';
+    if (!subcategoriaEfectiva) errs.subcategoria = 'Selecciona una subcategoría (agrega una con el botón de lápiz).';
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+
+    onConfirm({ fecha, subcategoria: subcategoriaEfectiva, monto: Number(monto), notas, categoria });
   }
 
   return (
@@ -48,14 +70,33 @@ export function ScannerResult({ result, imagePreview, onConfirm, onCancel, loadi
         </div>
       )}
 
-      <Input label="Fecha" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} required />
+      <Input
+        label="Fecha"
+        type="date"
+        value={fecha}
+        onChange={(e) => {
+          setFecha(e.target.value);
+          if (errors.fecha) setErrors((p) => ({ ...p, fecha: undefined }));
+        }}
+        error={errors.fecha}
+        required
+      />
       <Select
         label="Categoría"
         value={categoria}
         onChange={(e) => setCategoria(e.target.value as CategoriaEgreso)}
         options={CATEGORIAS_EGRESO.map((c) => ({ value: c, label: c }))}
+        required
       />
-      <SubcategoriaSelect categoria={categoria} value={subcategoria} onChange={setSubcategoria} />
+      <SubcategoriaSelect
+        categoria={categoria}
+        value={subcategoriaEfectiva}
+        onChange={(v) => {
+          setSubcategoria(v);
+          if (errors.subcategoria) setErrors((p) => ({ ...p, subcategoria: undefined }));
+        }}
+        error={errors.subcategoria}
+      />
       <Input
         label="Monto (MXN)"
         type="number"
@@ -63,11 +104,16 @@ export function ScannerResult({ result, imagePreview, onConfirm, onCancel, loadi
         min="0.01"
         step="0.01"
         value={monto}
-        onChange={(e) => setMonto(e.target.value)}
+        onChange={(e) => {
+          setMonto(e.target.value);
+          if (errors.monto) setErrors((p) => ({ ...p, monto: undefined }));
+        }}
+        error={errors.monto}
         required
       />
       <Input
         label="Notas"
+        optional
         type="text"
         value={notas}
         onChange={(e) => setNotas(e.target.value)}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { deleteEgreso } from '@/lib/firebase/firestore';
 import { formatCurrency, formatDate } from '@/lib/utils/dates';
 import { Badge } from '@/components/ui/Badge';
@@ -29,7 +30,7 @@ export function EgresoItem({ egreso }: Props) {
         <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center shrink-0">
           {egreso.imagen_url ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={egreso.imagen_url} alt="recibo" className="w-10 h-10 rounded-xl object-cover" />
+            <img src={egreso.imagen_url} alt="recibo" loading="lazy" decoding="async" className="w-10 h-10 rounded-xl object-cover" />
           ) : (
             <svg className="w-5 h-5 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" />
@@ -46,8 +47,17 @@ export function EgresoItem({ egreso }: Props) {
           <p className="text-xs text-gray-500">{formatDate(date)}</p>
           {egreso.notas && <p className="text-xs text-gray-400 truncate">{egreso.notas}</p>}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <span className="text-base font-bold text-rose-600">{formatCurrency(egreso.monto)}</span>
+          <Link
+            href={`/egresos/${egreso.id}/editar`}
+            aria-label="Editar egreso"
+            className="p-2 rounded-xl text-gray-300 hover:text-emerald-600 hover:bg-emerald-50 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+            </svg>
+          </Link>
           <button
             onClick={() => setShowConfirm(true)}
             className="p-2 rounded-xl text-gray-300 hover:text-rose-500 hover:bg-rose-50 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"

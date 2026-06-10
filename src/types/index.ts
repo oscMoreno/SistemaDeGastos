@@ -3,6 +3,9 @@ import { Timestamp } from 'firebase/firestore';
 export type MetodoPago = 'Efectivo' | 'Transferencia' | 'Rappi';
 export type CategoriaEgreso = 'Gastos Insumos' | 'Sueldos' | 'Gastos Fijos';
 
+/** Listas de subcategorías por categoría (editables en la app, doc config/subcategorias) */
+export type SubcategoriasMap = Record<CategoriaEgreso, string[]>;
+
 export interface Ingreso {
   id: string;
   fecha: Timestamp;
@@ -60,4 +63,29 @@ export interface MonthlyTotal {
   ingresos: number;
   egresos: number;
   utilidad: number;
+}
+
+/** Resumen semana por semana (vista tipo Excel original) */
+export interface ResumenSemanal {
+  semana: number;
+  inicio: Date;
+  fin: Date;
+  ingresosTotal: number;
+  ingresosPorMetodo: Record<MetodoPago, number>;
+  ingresosPorDia: IngresoDia[];
+  egresosTotal: number;
+  egresosPorCategoria: EgresoCategoriaResumen[];
+  utilidad: number;
+}
+
+export interface IngresoDia {
+  fecha: Date;
+  porMetodo: Record<MetodoPago, number>;
+  total: number;
+}
+
+export interface EgresoCategoriaResumen {
+  categoria: CategoriaEgreso;
+  total: number;
+  items: { subcategoria: string; monto: number; veces: number }[];
 }

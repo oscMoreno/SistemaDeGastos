@@ -69,7 +69,12 @@ src/
 | `'Sueldos'` | Valeria, Javier, Clemente, Sabina |
 | `'Gastos Fijos'` | Renta, Luz, Agua, Internet, Spotify, Gas |
 
-Para agregar proveedores o empleados: editar **únicamente** `src/lib/utils/constants.ts` → `SUBCATEGORIAS`.
+**Las subcategorías son dinámicas** — viven en Firestore (doc `config/subcategorias`) y se administran desde la app: el botón de lápiz junto al selector de subcategoría en `EgresoForm`/`ScannerResult` abre `SubcategoriaManager` (bottom-sheet para agregar/eliminar nombres).
+
+- `SUBCATEGORIAS` en `src/lib/utils/constants.ts` es solo **semilla inicial y fallback** (siembra el doc la primera vez que se suscribe).
+- Eliminar un nombre solo lo quita de la lista; los egresos históricos con ese nombre **se conservan**.
+- No se permite eliminar el último nombre de una lista.
+- API en `firestore.ts`: `subscribeToSubcategorias()`, `addSubcategoria()`, `removeSubcategoria()`. El listener vive en `DataContext` → `useData().subcategorias`.
 
 ---
 
@@ -321,14 +326,19 @@ El dashboard tiene toggle `viewMode: 'semana' | 'mes'`:
    ```
 
 ### Pendiente (funcionalidad adicional)
-2. **Editar registros** — No hay edición, solo agregar/eliminar. Agregar ruta `/ingresos/[id]/editar` y `/egresos/[id]/editar`.
-3. **Exportar a Excel/CSV** — El dueño necesita reportes semanales para llevar al contador.
+2. ~~**Editar registros**~~ — ✅ Implementado: rutas `/ingresos/[id]/editar` y `/egresos/[id]/editar` (buscan el registro en `DataContext`). `IngresoForm`/`EgresoForm` aceptan `editId` + `initialValues`; con `editId` llaman `updateIngreso`/`updateEgreso` (recalculan semana/mes/anio; `imagen_url` no se toca al editar). Botón de lápiz en `IngresoItem`/`EgresoItem`.
+3. ~~**Exportar a Excel/CSV**~~ — ✅ Implementado en `lib/utils/export.ts` (CSV con BOM UTF-8, sin dependencias): `exportSemanaCsv` (botón en `WeekCard` expandido, formato del Excel original, incluye nota) y `exportAnioCsv` (botón "Exportar año" en pestaña Semanas).
 4. **Notificaciones de presupuesto** — Alertar cuando los egresos superan un umbral semanal configurado.
 5. **Múltiples años** — Agregar selector de año en historial.
-6. **Resumen semanal** — Vista dedicada semana-por-semana con desglose por categoría (similar al Excel original).
-7. **Toast/feedback visual** — No hay notificación de éxito al guardar. Implementar toast notifications.
+6. ~~**Resumen semanal**~~ — ✅ Implementado: pestaña "Semanas" en `/historial` (`WeekCard` + `computeResumenesSemanales` en `lib/utils/weekly.ts`). Tarjetas expandibles con ingresos por día/método, egresos por categoría con subcategorías agregadas, utilidad semanal, comparativa % vs semana inmediata anterior, mejor día, y nota semanal editable (colección `notas_semanales`, doc id `${anio}-S${semana}`, API `getNotaSemanal`/`setNotaSemanal`).
+7. ~~**Toast/feedback visual**~~ — ✅ Implementado: `ToastProvider` en `src/context/ToastContext.tsx`, montado en `(app)/layout.tsx` (dentro de `DataProvider`). Uso: `const { showToast } = useToast(); showToast('Guardado')` o `showToast(msg, 'error')`. Auto-descarta a los 2.5s, renderiza arriba del BottomNav.
 8. **Service Worker offline** — next-pwa no funciona con Turbopack. Implementar SW manual en `public/sw.js` para cache offline.
 9. **Deploy en Vercel** — No desplegado aún. Requiere configurar las variables de entorno en Vercel dashboard.
+
+### Otras features implementadas
+- **Pagos rápidos** — En `EgresoForm` (solo alta, no edición; categorías Sueldos y Gastos Fijos): chips con el último pago por subcategoría; tap = pre-llena subcategoría y monto. Derivado de `useData().egresos` en memoria.
+- **Validación de formularios** — Errores por campo (`error` prop), asterisco rojo en obligatorios, tag "· opcional" (`optional` prop en `Input`/`Select`). Formularios con `noValidate`.
+- **`stripUndefined`** en `firestore.ts` — Firestore rechaza `undefined`; se limpia todo payload antes de `addDoc`/`updateDoc`.
 
 ---
 

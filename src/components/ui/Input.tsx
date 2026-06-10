@@ -5,16 +5,22 @@ import { type InputHTMLAttributes, forwardRef } from 'react';
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
+  /** Muestra la etiqueta "opcional" junto al label */
+  optional?: boolean;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, className = '', id, ...props }, ref) => {
+  ({ label, error, optional, className = '', id, ...props }, ref) => {
     const inputId = id || label?.toLowerCase().replace(/\s+/g, '-');
     return (
       <div className="flex flex-col gap-1">
         {label && (
           <label htmlFor={inputId} className="text-sm font-medium text-gray-700">
             {label}
+            {props.required && <span className="text-rose-500"> *</span>}
+            {!props.required && optional && (
+              <span className="text-xs font-normal text-gray-400"> · opcional</span>
+            )}
           </label>
         )}
         <input

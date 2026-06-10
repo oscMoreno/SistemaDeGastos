@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { compressImage } from '@/lib/utils/image';
 
 interface ImageUploaderProps {
   onImageSelected: (file: File, preview: string) => void;
@@ -12,19 +13,15 @@ export function ImageUploader({ onImageSelected }: ImageUploaderProps) {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
 
-  function handleFile(file: File) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string;
-      setPreview(dataUrl);
-      onImageSelected(file, dataUrl);
-    };
-    reader.readAsDataURL(file);
+  async function handleFile(file: File) {
+    const { file: compressed, dataUrl } = await compressImage(file);
+    setPreview(dataUrl);
+    onImageSelected(compressed, dataUrl);
   }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (file) handleFile(file);
+    if (file) void handleFile(file);
   }
 
   return (

@@ -10,16 +10,21 @@ import {
   Timestamp,
   onSnapshot,
   getDocs,
+  getDoc,
   updateDoc,
   deleteField,
+  setDoc,
+  arrayUnion,
+  arrayRemove,
   type Query,
   type DocumentData,
   type QueryConstraint,
 } from 'firebase/firestore';
 import { getFirebaseApp } from './config';
 import { deleteStorageFile } from './storage';
-import type { Ingreso, Egreso } from '@/types';
+import type { Ingreso, Egreso, CategoriaEgreso, SubcategoriasMap } from '@/types';
 import { getWeekNumber, getMes, getAnio } from '@/lib/utils/dates';
+import { SUBCATEGORIAS } from '@/lib/utils/constants';
 
 function getDb() {
   return getFirestore(getFirebaseApp());
@@ -35,18 +40,51 @@ function computeDateFields(dateStr: string) {
   };
 }
 
+/** Firestore no acepta `undefined`: eliminar esas claves antes de escribir */
+function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as T;
+}
+
 export async function addIngreso(data: Omit<Ingreso, 'id' | 'fecha' | 'semana' | 'mes' | 'anio'> & { fechaStr: string }) {
   const { fechaStr, ...rest } = data;
   const dateFields = computeDateFields(fechaStr);
-  const docRef = await addDoc(collection(getDb(), 'ingresos'), { ...rest, ...dateFields });
+  const docRef = await addDoc(collection(getDb(), 'ingresos'), stripUndefined({ ...rest, ...dateFields }));
   return docRef.id;
 }
 
 export async function addEgreso(data: Omit<Egreso, 'id' | 'fecha' | 'semana' | 'mes' | 'anio'> & { fechaStr: string }) {
   const { fechaStr, ...rest } = data;
   const dateFields = computeDateFields(fechaStr);
-  const docRef = await addDoc(collection(getDb(), 'egresos'), { ...rest, ...dateFields });
+  const docRef = await addDoc(collection(getDb(), 'egresos'), stripUndefined({ ...rest, ...dateFields }));
   return docRef.id;
+}
+
+export async function updateIngreso(
+  id: string,
+  data: Omit<Ingreso, 'id' | 'fecha' | 'semana' | 'mes' | 'anio'> & { fechaStr: string }
+) {
+  const { fechaStr, ...rest } = data;
+  const dateFields = computeDateFields(fechaStr);
+  await updateDoc(doc(getDb(), 'ingresos', id), {
+    ...stripUndefined(rest),
+    ...dateFields,
+    // Si las notas quedaron vacías, limpiar el campo
+    ...(rest.notas === undefined ? { notas: deleteField() } : {}),
+  });
+}
+
+export async function updateEgreso(
+  id: string,
+  data: Omit<Egreso, 'id' | 'fecha' | 'semana' | 'mes' | 'anio' | 'imagen_url'> & { fechaStr: string }
+) {
+  const { fechaStr, ...rest } = data;
+  const dateFields = computeDateFields(fechaStr);
+  // imagen_url no se toca al editar: se conserva la del recibo original
+  await updateDoc(doc(getDb(), 'egresos', id), {
+    ...stripUndefined(rest),
+    ...dateFields,
+    ...(rest.notas === undefined ? { notas: deleteField() } : {}),
+  });
 }
 
 export async function deleteIngreso(id: string) {
@@ -79,10 +117,18 @@ export function subscribeToIngresos(
   callback: (data: Ingreso[]) => void
 ) {
   const q = ingresosQuery(filters);
-  return onSnapshot(q, (snapshot) => {
-    const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Ingreso));
-    callback(data);
-  });
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Ingreso));
+      callback(data);
+    },
+    (err) => {
+      // No dejar la app cargando para siempre: entregar lista vacía y loguear
+      console.error('[ingresos] listener error:', err.code, err.message);
+      callback([]);
+    }
+  );
 }
 
 export function subscribeToEgresos(
@@ -90,9 +136,83 @@ export function subscribeToEgresos(
   callback: (data: Egreso[]) => void
 ) {
   const q = egresosQuery(filters);
-  return onSnapshot(q, (snapshot) => {
-    const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Egreso));
-    callback(data);
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Egreso));
+      callback(data);
+    },
+    (err) => {
+      console.error('[egresos] listener error:', err.code, err.message);
+      callback([]);
+    }
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Subcategorías dinámicas (doc config/subcategorias)
+// Las listas (personal, proveedores, gastos fijos) son editables desde la app.
+// SUBCATEGORIAS de constants.ts solo se usa como semilla inicial y fallback.
+// ---------------------------------------------------------------------------
+
+function subcategoriasRef() {
+  return doc(getDb(), 'config', 'subcategorias');
+}
+
+export function subscribeToSubcategorias(callback: (data: SubcategoriasMap) => void) {
+  return onSnapshot(
+    subcategoriasRef(),
+    (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        callback({
+          'Gastos Insumos': (data['Gastos Insumos'] as string[]) ?? SUBCATEGORIAS['Gastos Insumos'],
+          'Sueldos': (data['Sueldos'] as string[]) ?? SUBCATEGORIAS['Sueldos'],
+          'Gastos Fijos': (data['Gastos Fijos'] as string[]) ?? SUBCATEGORIAS['Gastos Fijos'],
+        });
+      } else {
+        // Primera vez: sembrar el doc con los defaults de constants.ts
+        setDoc(subcategoriasRef(), SUBCATEGORIAS).catch(() => { /* offline: reintenta solo */ });
+        callback({ ...SUBCATEGORIAS });
+      }
+    },
+    (err) => {
+      // Sin permisos o error de red: continuar con los defaults, nunca bloquear la app
+      console.error('[subcategorias] listener error:', err.code, err.message);
+      callback({ ...SUBCATEGORIAS });
+    }
+  );
+}
+
+export async function addSubcategoria(categoria: CategoriaEgreso, nombre: string): Promise<void> {
+  await setDoc(subcategoriasRef(), { [categoria]: arrayUnion(nombre) }, { merge: true });
+}
+
+/** Quita el nombre de la lista. Los egresos históricos con ese nombre se conservan. */
+export async function removeSubcategoria(categoria: CategoriaEgreso, nombre: string): Promise<void> {
+  await setDoc(subcategoriasRef(), { [categoria]: arrayRemove(nombre) }, { merge: true });
+}
+
+// ---------------------------------------------------------------------------
+// Notas semanales (colección notas_semanales, doc id `${anio}-S${semana}`)
+// Observaciones libres por semana: faltas, eventos, recordatorios.
+// ---------------------------------------------------------------------------
+
+function notaSemanalRef(anio: number, semana: number) {
+  return doc(getDb(), 'notas_semanales', `${anio}-S${semana}`);
+}
+
+export async function getNotaSemanal(anio: number, semana: number): Promise<string> {
+  const snap = await getDoc(notaSemanalRef(anio, semana));
+  return snap.exists() ? ((snap.data().texto as string) ?? '') : '';
+}
+
+export async function setNotaSemanal(anio: number, semana: number, texto: string): Promise<void> {
+  await setDoc(notaSemanalRef(anio, semana), {
+    anio,
+    semana,
+    texto: texto.trim(),
+    actualizado: Timestamp.now(),
   });
 }
 

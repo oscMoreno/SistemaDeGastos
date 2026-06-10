@@ -11,57 +11,60 @@ import { ScannerResult } from '@/components/scanner/ScannerResult';
 import { uploadReceiptImage } from '@/lib/firebase/storage';
 import { addEgreso } from '@/lib/firebase/firestore';
 import { scanReceipt } from '@/lib/firebase/ai';
+import { useToast } from '@/context/ToastContext';
 import type { GeminiReceiptResult, CategoriaEgreso } from '@/types';
 
 type ScanStep = 'idle' | 'uploading' | 'scanning' | 'confirming' | 'saving' | 'error';
 
 export default function ScannerPage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [step, setStep] = useState<ScanStep>('idle');
   const [errorMsg, setErrorMsg] = useState('');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | undefined>(undefined);
   const [downloadURL, setDownloadURL] = useState<string | undefined>(undefined);
   const [scanResult, setScanResult] = useState<GeminiReceiptResult | null>(null);
 
   async function handleImageSelected(file: File, preview: string) {
-    setSelectedFile(file);
     setImagePreview(preview);
     await startScan(file, preview);
   }
 
   async function startScan(file: File, preview: string) {
-    setStep('uploading');
+    setStep('scanning');
     setErrorMsg('');
-    let url: string | undefined;
 
-    try {
-      const { downloadURL: dl } = await uploadReceiptImage(file);
-      url = dl;
-      setDownloadURL(dl);
-    } catch {
+    // Upload a Storage y escaneo con IA en paralelo: el escaneo no
+    // necesita la URL de Storage (usa el base64 local), así que no
+    // hay razón para esperar la subida antes de escanear.
+    const base64 = preview.split(',')[1];
+    const mimeType = file.type || 'image/jpeg';
+
+    const [uploadRes, scanRes] = await Promise.allSettled([
+      uploadReceiptImage(file),
+      scanReceipt(base64, mimeType),
+    ]);
+
+    if (uploadRes.status === 'rejected') {
       setStep('error');
       setErrorMsg('No se pudo subir la imagen. Verifica tu conexión.');
       return;
     }
+    setDownloadURL(uploadRes.value.downloadURL);
 
-    setStep('scanning');
-    try {
-      const base64 = preview.split(',')[1];
-      const mimeType = file.type || 'image/jpeg';
-      const result = await scanReceipt(base64, mimeType);
-      setScanResult(result);
-      setStep('confirming');
-    } catch {
+    if (scanRes.status === 'rejected') {
       setStep('error');
       setErrorMsg('No se pudo leer el recibo. Puedes ingresar los datos manualmente.');
+      return;
     }
+
+    setScanResult(scanRes.value);
+    setStep('confirming');
   }
 
   async function handleConfirm(confirmed: GeminiReceiptResult & { categoria: CategoriaEgreso }) {
     setStep('saving');
     try {
-      const date = new Date(confirmed.fecha + 'T12:00:00');
       await addEgreso({
         fechaStr: confirmed.fecha,
         categoria: confirmed.categoria,
@@ -70,6 +73,7 @@ export default function ScannerPage() {
         imagen_url: downloadURL,
         notas: confirmed.notas || undefined,
       });
+      showToast('Egreso guardado');
       router.replace('/egresos');
     } catch {
       setStep('error');
@@ -80,7 +84,6 @@ export default function ScannerPage() {
   function handleRetry() {
     setStep('idle');
     setScanResult(null);
-    setSelectedFile(null);
     setImagePreview(undefined);
     setDownloadURL(undefined);
     setErrorMsg('');

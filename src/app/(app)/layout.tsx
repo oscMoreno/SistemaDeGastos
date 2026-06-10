@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { DataProvider } from '@/context/DataContext';
+import { ToastProvider } from '@/context/ToastContext';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { Spinner } from '@/components/ui/Spinner';
 import { cleanupExpiredImages } from '@/lib/firebase/firestore';
@@ -34,10 +35,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <DataProvider>
-      <div className="min-h-screen pb-20 bg-slate-50">
-        {children}
-        <BottomNav />
-      </div>
+      <ToastProvider>
+        <div className="min-h-screen pb-20 bg-slate-50">
+          {children}
+          <BottomNav />
+        </div>
+      </ToastProvider>
     </DataProvider>
   );
 }

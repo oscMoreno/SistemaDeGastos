@@ -7,12 +7,12 @@ import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ImageUploader } from '@/components/scanner/ImageUploader';
 import { ScannerStatus } from '@/components/scanner/ScannerStatus';
-import { ScannerResult } from '@/components/scanner/ScannerResult';
+import { ScannerResult, type ScannerConfirmData } from '@/components/scanner/ScannerResult';
 import { uploadReceiptImage } from '@/lib/firebase/storage';
 import { addEgreso } from '@/lib/firebase/firestore';
 import { scanReceipt } from '@/lib/firebase/ai';
 import { useToast } from '@/context/ToastContext';
-import type { GeminiReceiptResult, CategoriaEgreso } from '@/types';
+import type { GeminiReceiptResult } from '@/types';
 
 type ScanStep = 'idle' | 'uploading' | 'scanning' | 'confirming' | 'saving' | 'error';
 
@@ -64,7 +64,7 @@ export default function ScannerPage() {
     setStep('confirming');
   }
 
-  async function handleConfirm(confirmed: GeminiReceiptResult & { categoria: CategoriaEgreso }) {
+  async function handleConfirm(confirmed: ScannerConfirmData) {
     setStep('saving');
     try {
       await addEgreso({
@@ -74,6 +74,9 @@ export default function ScannerPage() {
         monto: confirmed.monto,
         imagen_url: downloadURL,
         notas: confirmed.notas || undefined,
+        moneda: confirmed.moneda === 'USD' ? 'USD' : undefined,
+        monto_usd: confirmed.monto_usd,
+        tipo_cambio: confirmed.tipo_cambio,
       });
       showToast('Egreso guardado');
       router.replace('/egresos');

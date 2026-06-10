@@ -45,6 +45,11 @@ export function EgresoItem({ egreso }: Props) {
             <span className="text-xs text-gray-400">S{egreso.semana}</span>
           </div>
           <p className="text-xs text-gray-500">{formatDate(date)}</p>
+          {egreso.moneda === 'USD' && egreso.monto_usd && (
+            <p className="text-xs text-sky-600 font-medium">
+              USD ${egreso.monto_usd.toFixed(2)}{egreso.tipo_cambio ? ` · TC ${egreso.tipo_cambio}` : ''}
+            </p>
+          )}
           {egreso.notas && <p className="text-xs text-gray-400 truncate">{egreso.notas}</p>}
         </div>
         <div className="flex items-center gap-1">

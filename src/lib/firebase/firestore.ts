@@ -84,6 +84,8 @@ export async function updateEgreso(
     ...stripUndefined(rest),
     ...dateFields,
     ...(rest.notas === undefined ? { notas: deleteField() } : {}),
+    // Si el egreso dejó de ser USD, limpiar los campos de conversión
+    ...(rest.moneda === undefined ? { moneda: deleteField(), monto_usd: deleteField(), tipo_cambio: deleteField() } : {}),
   });
 }
 

@@ -17,17 +17,22 @@ export interface Ingreso {
   notas?: string;
 }
 
+export type Moneda = 'MXN' | 'USD';
+
 export interface Egreso {
   id: string;
   fecha: Timestamp;
   categoria: CategoriaEgreso;
   subcategoria: string;
-  monto: number;
+  monto: number;        // SIEMPRE en MXN (convertido si el ticket era USD)
   semana: number;
   mes: string;
   anio: number;
   imagen_url?: string;
   notas?: string;
+  moneda?: Moneda;      // 'USD' solo si el ticket original era en dólares
+  monto_usd?: number;   // monto original en USD
+  tipo_cambio?: number; // tipo de cambio usado en la conversión
 }
 
 export interface GeminiReceiptResult {
@@ -35,6 +40,7 @@ export interface GeminiReceiptResult {
   subcategoria: string;
   notas: string;
   fecha: string;
+  moneda?: Moneda; // detectada por la IA según el recibo
 }
 
 export interface DashboardStats {

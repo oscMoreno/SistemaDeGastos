@@ -11,9 +11,10 @@ Campos requeridos:
 - "subcategoria": nombre del proveedor (si coincide con alguno de esta lista úsalo tal cual: Smart, City Club, Carnemaf, Disfruta, Santos, Central de Abastos, Carne MG; si no, escribe el nombre real)
 - "notas": descripción breve de 1-2 líneas de lo que se compró
 - "fecha": fecha del recibo en formato YYYY-MM-DD (si no es visible usa la fecha de hoy)
+- "moneda": "MXN" o "USD". Usa "USD" SOLO si el recibo es claramente de Estados Unidos o el total está en dólares (indicios: "USD", "US$", "DLLS", dirección en EE.UU., textos en inglés como "SUBTOTAL/TAX/TOTAL" con tienda americana tipo Walmart US, Ross, HEB de Texas). Si es un recibo mexicano normal usa "MXN".
 
 Ejemplo de respuesta correcta:
-{"monto":572.63,"subcategoria":"Smart","notas":"Compra de carnes y verduras","fecha":"2026-06-08"}`;
+{"monto":572.63,"subcategoria":"Smart","notas":"Compra de carnes y verduras","fecha":"2026-06-08","moneda":"MXN"}`;
 
 export async function POST(request: Request) {
   const apiKey = process.env.MISTRAL_API_KEY;

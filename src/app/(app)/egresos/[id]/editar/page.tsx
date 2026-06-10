@@ -35,9 +35,12 @@ export default function EditarEgresoPage() {
             fecha: dateToInputValue(egreso.fecha.toDate()),
             categoria: egreso.categoria,
             subcategoria: egreso.subcategoria,
-            monto: egreso.monto,
+            // Si el ticket era USD, mostrar el monto original en dólares
+            monto: egreso.moneda === 'USD' && egreso.monto_usd ? egreso.monto_usd : egreso.monto,
             notas: egreso.notas ?? '',
             imagen_url: egreso.imagen_url,
+            moneda: egreso.moneda,
+            tipo_cambio: egreso.tipo_cambio,
           }}
         />
       )}

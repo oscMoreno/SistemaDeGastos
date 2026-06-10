@@ -84,10 +84,17 @@ export function exportAnioCsv(ingresos: Ingreso[], egresos: Egreso[], anio: numb
       ts: i.fecha.toMillis(),
       row: ['Ingreso', i.fecha.toDate().toLocaleDateString('es-MX'), i.semana, i.mes, i.metodo_pago, '', i.monto, i.notas ?? ''] as CsvCell[],
     })),
-    ...egresos.map((e) => ({
-      ts: e.fecha.toMillis(),
-      row: ['Egreso', e.fecha.toDate().toLocaleDateString('es-MX'), e.semana, e.mes, e.categoria, e.subcategoria, -e.monto, e.notas ?? ''] as CsvCell[],
-    })),
+    ...egresos.map((e) => {
+      const notaUsd =
+        e.moneda === 'USD' && e.monto_usd
+          ? `[${e.monto_usd.toFixed(2)} USD @ ${e.tipo_cambio ?? '?'}]`
+          : '';
+      const notas = [e.notas, notaUsd].filter(Boolean).join(' ');
+      return {
+        ts: e.fecha.toMillis(),
+        row: ['Egreso', e.fecha.toDate().toLocaleDateString('es-MX'), e.semana, e.mes, e.categoria, e.subcategoria, -e.monto, notas] as CsvCell[],
+      };
+    }),
   ].sort((a, b) => a.ts - b.ts);
 
   rows.push(...movs.map((m) => m.row));

@@ -336,6 +336,7 @@ El dashboard tiene toggle `viewMode: 'semana' | 'mes'`:
 9. **Deploy en Vercel** — No desplegado aún. Requiere configurar las variables de entorno en Vercel dashboard.
 
 ### Otras features implementadas
+- **Tickets en USD** — Toggle MXN/USD (`MonedaToggle`) junto al monto en `EgresoForm` y `ScannerResult`. Con USD: input de tipo de cambio (pre-llenado vía `getTipoCambioUSD()` en `lib/utils/currency.ts` — API open.er-api.com, caché 12h en localStorage, editable) y preview de conversión. El campo `monto` SIEMPRE se guarda en MXN; los campos opcionales `moneda`/`monto_usd`/`tipo_cambio` conservan el original. El prompt de Mistral devuelve `"moneda"` y `ScannerResult` la preselecciona. `EgresoItem` y el export muestran el USD original.
 - **Pagos rápidos** — En `EgresoForm` (solo alta, no edición; categorías Sueldos y Gastos Fijos): chips con el último pago por subcategoría; tap = pre-llena subcategoría y monto. Derivado de `useData().egresos` en memoria.
 - **Validación de formularios** — Errores por campo (`error` prop), asterisco rojo en obligatorios, tag "· opcional" (`optional` prop en `Input`/`Select`). Formularios con `noValidate`.
 - **`stripUndefined`** en `firestore.ts` — Firestore rechaza `undefined`; se limpia todo payload antes de `addDoc`/`updateDoc`.

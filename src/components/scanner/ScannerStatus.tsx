@@ -6,6 +6,8 @@ interface ScannerStatusProps {
   status: StatusType;
   errorMessage?: string;
   onRetry?: () => void;
+  /** Porcentaje de subida (0-100); muestra barra de progreso si se pasa */
+  uploadProgress?: number;
 }
 
 const messages: Record<StatusType, string> = {
@@ -14,7 +16,7 @@ const messages: Record<StatusType, string> = {
   error: '',
 };
 
-export function ScannerStatus({ status, errorMessage, onRetry }: ScannerStatusProps) {
+export function ScannerStatus({ status, errorMessage, onRetry, uploadProgress }: ScannerStatusProps) {
   if (status === 'error') {
     return (
       <div className="flex flex-col items-center gap-4 px-4 py-12 text-center">
@@ -40,6 +42,17 @@ export function ScannerStatus({ status, errorMessage, onRetry }: ScannerStatusPr
     <div className="flex flex-col items-center gap-4 px-4 py-12">
       <Spinner size="lg" />
       <p className="text-sm text-gray-500">{messages[status]}</p>
+      {uploadProgress !== undefined && uploadProgress < 100 && (
+        <div className="w-full max-w-xs">
+          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+              style={{ width: `${uploadProgress}%` }}
+            />
+          </div>
+          <p className="text-xs text-gray-400 text-center mt-1">Subiendo foto {uploadProgress}%</p>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,10 +1,13 @@
 'use client';
 
-import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getFirebaseApp } from './config';
 import { getFirebaseAuth } from './auth';
 
-export async function uploadReceiptImage(file: File): Promise<{ downloadURL: string; storagePath: string }> {
+export async function uploadReceiptImage(
+  file: File,
+  onProgress?: (pct: number) => void
+): Promise<{ downloadURL: string; storagePath: string }> {
   const auth = getFirebaseAuth();
   const userId = auth.currentUser?.uid;
   if (!userId) throw new Error('User not authenticated');
@@ -15,7 +18,20 @@ export async function uploadReceiptImage(file: File): Promise<{ downloadURL: str
   const storagePath = `receipts/${userId}/${timestamp}.${ext}`;
   const storageRef = ref(storage, storagePath);
 
-  await uploadBytes(storageRef, file);
+  const task = uploadBytesResumable(storageRef, file, {
+    contentType: file.type || 'image/jpeg',
+    cacheControl: 'public,max-age=31536000', // miniaturas cacheadas en el browser
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    task.on(
+      'state_changed',
+      (snap) => onProgress?.(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
+      reject,
+      () => resolve()
+    );
+  });
+
   const downloadURL = await getDownloadURL(storageRef);
   return { downloadURL, storagePath };
 }

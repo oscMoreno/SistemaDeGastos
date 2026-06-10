@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 
+// Vercel: permitir hasta 30s (el análisis de Mistral puede tardar >10s,
+// que es el límite default del plan Hobby)
+export const maxDuration = 30;
+
 const PROMPT = `Analiza este recibo de compra y devuelve ÚNICAMENTE un objeto JSON válido, sin markdown ni texto adicional.
 
 Campos requeridos:

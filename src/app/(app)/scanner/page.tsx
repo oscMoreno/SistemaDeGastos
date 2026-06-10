@@ -24,6 +24,7 @@ export default function ScannerPage() {
   const [imagePreview, setImagePreview] = useState<string | undefined>(undefined);
   const [downloadURL, setDownloadURL] = useState<string | undefined>(undefined);
   const [scanResult, setScanResult] = useState<GeminiReceiptResult | null>(null);
+  const [uploadPct, setUploadPct] = useState(0);
 
   async function handleImageSelected(file: File, preview: string) {
     setImagePreview(preview);
@@ -33,6 +34,7 @@ export default function ScannerPage() {
   async function startScan(file: File, preview: string) {
     setStep('scanning');
     setErrorMsg('');
+    setUploadPct(0);
 
     // Upload a Storage y escaneo con IA en paralelo: el escaneo no
     // necesita la URL de Storage (usa el base64 local), así que no
@@ -41,7 +43,7 @@ export default function ScannerPage() {
     const mimeType = file.type || 'image/jpeg';
 
     const [uploadRes, scanRes] = await Promise.allSettled([
-      uploadReceiptImage(file),
+      uploadReceiptImage(file, setUploadPct),
       scanReceipt(base64, mimeType),
     ]);
 
@@ -102,7 +104,7 @@ export default function ScannerPage() {
       )}
 
       {(step === 'uploading' || step === 'scanning') && (
-        <ScannerStatus status={step} />
+        <ScannerStatus status={step} uploadProgress={uploadPct} />
       )}
 
       {step === 'error' && (

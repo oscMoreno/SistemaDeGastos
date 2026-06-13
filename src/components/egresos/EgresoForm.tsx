@@ -3,7 +3,7 @@
 import { useState, useMemo, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { addEgreso, updateEgreso } from '@/lib/firebase/firestore';
-import { CATEGORIAS_EGRESO, SUBCATEGORIAS } from '@/lib/utils/constants';
+import { CATEGORIAS_EGRESO, SUBCATEGORIAS, MONTOS_SEMANALES_FIJOS } from '@/lib/utils/constants';
 import { useData } from '@/context/DataContext';
 import { useToast } from '@/context/ToastContext';
 import { dateToInputValue, formatCurrency } from '@/lib/utils/dates';
@@ -84,19 +84,26 @@ export function EgresoForm({ initialValues, editId }: EgresoFormProps) {
     return 0;
   }, [horasExtras, tarifaHoraExtra]);
 
-  // Pagos rápidos: último pago por subcategoría (solo Sueldos y Gastos Fijos,
-  // donde los montos se repiten semana a semana). Tap = pre-llenar.
+  // Pagos rápidos para Sueldos: último pago por trabajador. Tap = pre-llenar.
   const pagosRecientes = useMemo<Egreso[]>(() => {
-    if (editId || categoria === 'Gastos Insumos') return [];
+    if (editId || categoria !== 'Sueldos') return [];
     const vistos = new Map<string, Egreso>();
     for (const e of egresos) {
-      // egresos viene ordenado por fecha desc — el primero es el más reciente
-      if (e.categoria === categoria && !vistos.has(e.subcategoria)) {
+      if (e.categoria === 'Sueldos' && !vistos.has(e.subcategoria)) {
         vistos.set(e.subcategoria, e);
       }
     }
     return [...vistos.values()].slice(0, 8);
   }, [egresos, categoria, editId]);
+
+  // Chips de Gastos Fijos: siempre se muestran TODOS con el monto semanal preset.
+  const gastosFijosSugeridos = useMemo(() => {
+    if (editId || categoria !== 'Gastos Fijos') return [];
+    return (subcategorias['Gastos Fijos'] ?? []).map((sub) => ({
+      subcategoria: sub,
+      monto: MONTOS_SEMANALES_FIJOS[sub] ?? 0,
+    }));
+  }, [categoria, editId, subcategorias]);
 
   function validate(): FieldErrors {
     const errs: FieldErrors = {};
@@ -236,6 +243,27 @@ export function EgresoForm({ initialValues, editId }: EgresoFormProps) {
                 className="shrink-0 px-3 py-2 rounded-xl text-xs font-medium bg-gray-100 text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors min-h-[44px]"
               >
                 {p.subcategoria} · {formatCurrency(p.monto - (p.monto_horas_extras ?? 0))}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {gastosFijosSugeridos.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-amber-600 mb-1.5">Presupuesto semanal — toca para pre-llenar</p>
+          <div className="flex flex-wrap gap-2">
+            {gastosFijosSugeridos.map(({ subcategoria: sub, monto: montoSug }) => (
+              <button
+                key={sub}
+                type="button"
+                onClick={() => {
+                  setSubcategoria(sub);
+                  if (montoSug > 0) setMonto(montoSug.toString());
+                  setErrors({});
+                }}
+                className="shrink-0 px-3 py-2 rounded-xl text-xs font-medium bg-amber-50 text-amber-800 hover:bg-amber-100 transition-colors min-h-[44px]"
+              >
+                {sub}{montoSug > 0 ? ` · ${formatCurrency(montoSug)}` : ''}
               </button>
             ))}
           </div>

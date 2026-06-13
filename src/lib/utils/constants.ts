@@ -11,7 +11,21 @@ export const CATEGORIAS_EGRESO: CategoriaEgreso[] = [
 export const SUBCATEGORIAS: Record<CategoriaEgreso, string[]> = {
   'Gastos Insumos': ['Smart', 'City Club', 'Carnemaf', 'Disfruta', 'Central de Abastos'],
   'Sueldos': ['Valeria', 'Javier', 'Clemente', 'Sabina'],
-  'Gastos Fijos': ['Renta', 'Luz', 'Agua', 'Internet', 'Spotify', 'Gas'],
+  'Gastos Fijos': ['Renta', 'Luz', 'Agua', 'Internet', 'Spotify', 'Gas', 'Coepris', 'Fumigaciones', 'Gasolina', 'Aguinaldos', 'Inversión'],
+};
+
+/** Monto semanal a apartar por cada gasto fijo (se muestra como chip en el formulario) */
+export const MONTOS_SEMANALES_FIJOS: Record<string, number> = {
+  'Renta': 3000,
+  'Luz': 1000,
+  'Gas': 500,
+  'Spotify': 47.25,
+  'Internet': 119,
+  'Coepris': 58.33,
+  'Fumigaciones': 104.16,
+  'Gasolina': 300,
+  'Aguinaldos': 1295.83,
+  'Inversión': 1388.88,
 };
 
 export const MESES = [

@@ -174,6 +174,16 @@ export function subscribeToSubcategorias(callback: (data: SubcategoriasMap) => v
           'Sueldos': (data['Sueldos'] as string[]) ?? SUBCATEGORIAS['Sueldos'],
           'Gastos Fijos': (data['Gastos Fijos'] as string[]) ?? SUBCATEGORIAS['Gastos Fijos'],
         });
+        // Migrar subcategorías nuevas del seed que no estén aún en Firestore (solo suma, nunca borra)
+        const updates: Record<string, unknown> = {};
+        for (const cat of Object.keys(SUBCATEGORIAS) as CategoriaEgreso[]) {
+          const existing: string[] = (data[cat] as string[]) ?? [];
+          const missing = SUBCATEGORIAS[cat].filter((s) => !existing.includes(s));
+          if (missing.length > 0) updates[cat] = arrayUnion(...missing);
+        }
+        if (Object.keys(updates).length > 0) {
+          setDoc(subcategoriasRef(), updates, { merge: true }).catch(() => {});
+        }
       } else {
         // Primera vez: sembrar el doc con los defaults de constants.ts
         setDoc(subcategoriasRef(), SUBCATEGORIAS).catch(() => { /* offline: reintenta solo */ });

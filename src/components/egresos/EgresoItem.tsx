@@ -50,6 +50,11 @@ export function EgresoItem({ egreso }: Props) {
               USD ${egreso.monto_usd.toFixed(2)}{egreso.tipo_cambio ? ` · TC ${egreso.tipo_cambio}` : ''}
             </p>
           )}
+          {egreso.horas_extras && egreso.monto_horas_extras && (
+            <p className="text-xs text-purple-600 font-medium">
+              {egreso.horas_extras}h extras · {egreso.tarifa_hora_extra ? `$${egreso.tarifa_hora_extra}/h · ` : ''}+{formatCurrency(egreso.monto_horas_extras)}
+            </p>
+          )}
           {egreso.notas && <p className="text-xs text-gray-400 truncate">{egreso.notas}</p>}
         </div>
         <div className="flex items-center gap-1">

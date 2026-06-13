@@ -33,6 +33,9 @@ export interface Egreso {
   moneda?: Moneda;      // 'USD' solo si el ticket original era en dólares
   monto_usd?: number;   // monto original en USD
   tipo_cambio?: number; // tipo de cambio usado en la conversión
+  horas_extras?: number;       // solo categoría Sueldos
+  tarifa_hora_extra?: number;  // MXN por hora extra
+  monto_horas_extras?: number; // horas_extras × tarifa_hora_extra
 }
 
 export interface GeminiReceiptResult {

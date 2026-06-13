@@ -86,6 +86,8 @@ export async function updateEgreso(
     ...(rest.notas === undefined ? { notas: deleteField() } : {}),
     // Si el egreso dejó de ser USD, limpiar los campos de conversión
     ...(rest.moneda === undefined ? { moneda: deleteField(), monto_usd: deleteField(), tipo_cambio: deleteField() } : {}),
+    // Si ya no hay horas extras, limpiar los campos
+    ...(rest.horas_extras === undefined ? { horas_extras: deleteField(), tarifa_hora_extra: deleteField(), monto_horas_extras: deleteField() } : {}),
   });
 }
 

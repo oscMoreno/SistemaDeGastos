@@ -17,7 +17,13 @@ import type { CategoriaEgreso, GeminiReceiptResult, Egreso, Moneda } from '@/typ
 
 interface EgresoFormProps {
   initialValues?: Partial<
-    GeminiReceiptResult & { categoria: CategoriaEgreso; imagen_url?: string; tipo_cambio?: number }
+    GeminiReceiptResult & {
+      categoria: CategoriaEgreso;
+      imagen_url?: string;
+      tipo_cambio?: number;
+      horas_extras?: number;
+      tarifa_hora_extra?: number;
+    }
   >;
   /** Si se pasa, el formulario edita ese registro en vez de crear uno nuevo */
   editId?: string;
@@ -28,6 +34,8 @@ interface FieldErrors {
   monto?: string;
   subcategoria?: string;
   tipoCambio?: string;
+  horasExtras?: string;
+  tarifaHoraExtra?: string;
 }
 
 export function EgresoForm({ initialValues, editId }: EgresoFormProps) {
@@ -51,6 +59,8 @@ export function EgresoForm({ initialValues, editId }: EgresoFormProps) {
   const [notas, setNotas] = useState(initialValues?.notas ?? '');
   const [moneda, setMoneda] = useState<Moneda>(initialValues?.moneda ?? 'MXN');
   const [tipoCambio, setTipoCambio] = useState(initialValues?.tipo_cambio?.toString() ?? '');
+  const [horasExtras, setHorasExtras] = useState(initialValues?.horas_extras?.toString() ?? '');
+  const [tarifaHoraExtra, setTarifaHoraExtra] = useState(initialValues?.tarifa_hora_extra?.toString() ?? '');
 
   function selectMoneda(m: Moneda) {
     setMoneda(m);
@@ -66,6 +76,13 @@ export function EgresoForm({ initialValues, editId }: EgresoFormProps) {
   // actual (cambió la categoría o se eliminó el nombre), usar la primera.
   const lista = subcategorias[categoria] ?? [];
   const subcategoriaEfectiva = lista.includes(subcategoria) ? subcategoria : (lista[0] ?? '');
+
+  const montoHorasExtras = useMemo(() => {
+    const h = parseFloat(horasExtras);
+    const t = parseFloat(tarifaHoraExtra);
+    if (!isNaN(h) && !isNaN(t) && h > 0 && t > 0) return h * t;
+    return 0;
+  }, [horasExtras, tarifaHoraExtra]);
 
   // Pagos rápidos: último pago por subcategoría (solo Sueldos y Gastos Fijos,
   // donde los montos se repiten semana a semana). Tap = pre-llenar.
@@ -91,6 +108,14 @@ export function EgresoForm({ initialValues, editId }: EgresoFormProps) {
       if (!tipoCambio.trim()) errs.tipoCambio = 'El tipo de cambio es obligatorio para tickets en dólares.';
       else if (isNaN(Number(tipoCambio)) || Number(tipoCambio) <= 0) errs.tipoCambio = 'Tipo de cambio inválido.';
     }
+    if (categoria === 'Sueldos') {
+      const h = horasExtras.trim();
+      const t = tarifaHoraExtra.trim();
+      if (h && !t) errs.tarifaHoraExtra = 'Ingresa la tarifa por hora.';
+      if (!h && t) errs.horasExtras = 'Ingresa el número de horas.';
+      if (h && isNaN(Number(h))) errs.horasExtras = 'Número de horas inválido.';
+      if (t && isNaN(Number(t))) errs.tarifaHoraExtra = 'Tarifa inválida.';
+    }
     return errs;
   }
 
@@ -98,6 +123,8 @@ export function EgresoForm({ initialValues, editId }: EgresoFormProps) {
     moneda === 'USD' && monto && tipoCambio && Number(tipoCambio) > 0
       ? usdToMxn(Number(monto), Number(tipoCambio))
       : Number(monto) || 0;
+
+  const totalGuardado = montoMXN + (categoria === 'Sueldos' ? montoHorasExtras : 0);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -113,14 +140,24 @@ export function EgresoForm({ initialValues, editId }: EgresoFormProps) {
           ? { moneda: 'USD' as Moneda, monto_usd: Number(monto), tipo_cambio: Number(tipoCambio) }
           : { moneda: undefined, monto_usd: undefined, tipo_cambio: undefined };
 
+      const camposHorasExtras =
+        categoria === 'Sueldos' && montoHorasExtras > 0
+          ? {
+              horas_extras: parseFloat(horasExtras),
+              tarifa_hora_extra: parseFloat(tarifaHoraExtra),
+              monto_horas_extras: montoHorasExtras,
+            }
+          : { horas_extras: undefined, tarifa_hora_extra: undefined, monto_horas_extras: undefined };
+
       if (editId) {
         await updateEgreso(editId, {
           fechaStr: fecha,
           categoria,
           subcategoria: subcategoriaEfectiva,
-          monto: montoMXN,
+          monto: totalGuardado,
           notas: notas.trim() || undefined,
           ...camposMoneda,
+          ...camposHorasExtras,
         });
         showToast('Egreso actualizado');
       } else {
@@ -128,10 +165,11 @@ export function EgresoForm({ initialValues, editId }: EgresoFormProps) {
           fechaStr: fecha,
           categoria,
           subcategoria: subcategoriaEfectiva,
-          monto: montoMXN,
+          monto: totalGuardado,
           imagen_url: initialValues?.imagen_url,
           notas: notas.trim() || undefined,
           ...camposMoneda,
+          ...camposHorasExtras,
         });
         showToast('Egreso guardado');
       }
@@ -160,7 +198,12 @@ export function EgresoForm({ initialValues, editId }: EgresoFormProps) {
         label="Categoría"
         value={categoria}
         onChange={(e) => {
-          setCategoria(e.target.value as CategoriaEgreso);
+          const nueva = e.target.value as CategoriaEgreso;
+          setCategoria(nueva);
+          if (nueva !== 'Sueldos') {
+            setHorasExtras('');
+            setTarifaHoraExtra('');
+          }
         }}
         options={CATEGORIAS_EGRESO.map((c) => ({ value: c, label: c }))}
         required
@@ -184,12 +227,15 @@ export function EgresoForm({ initialValues, editId }: EgresoFormProps) {
                 type="button"
                 onClick={() => {
                   setSubcategoria(p.subcategoria);
-                  setMonto(p.monto.toString());
+                  const base = p.monto - (p.monto_horas_extras ?? 0);
+                  setMonto(base.toString());
+                  if (p.tarifa_hora_extra) setTarifaHoraExtra(p.tarifa_hora_extra.toString());
+                  setHorasExtras('');
                   setErrors({});
                 }}
                 className="shrink-0 px-3 py-2 rounded-xl text-xs font-medium bg-gray-100 text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors min-h-[44px]"
               >
-                {p.subcategoria} · {formatCurrency(p.monto)}
+                {p.subcategoria} · {formatCurrency(p.monto - (p.monto_horas_extras ?? 0))}
               </button>
             ))}
           </div>
@@ -198,7 +244,7 @@ export function EgresoForm({ initialValues, editId }: EgresoFormProps) {
       <div className="flex items-start gap-2">
         <div className="flex-1">
           <Input
-            label={`Monto (${moneda})`}
+            label={categoria === 'Sueldos' ? `Sueldo base (${moneda})` : `Monto (${moneda})`}
             type="number"
             inputMode="decimal"
             min="0.01"
@@ -238,6 +284,53 @@ export function EgresoForm({ initialValues, editId }: EgresoFormProps) {
             <p className="text-xs text-sky-700 mt-1 font-medium">
               = {formatCurrency(montoMXN)} MXN (se guarda en pesos)
             </p>
+          )}
+        </div>
+      )}
+      {categoria === 'Sueldos' && (
+        <div className="bg-purple-50 rounded-xl p-3 flex flex-col gap-3">
+          <p className="text-xs font-medium text-purple-700">Horas extras (opcional)</p>
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <Input
+                label="Horas"
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.5"
+                placeholder="0"
+                value={horasExtras}
+                onChange={(e) => {
+                  setHorasExtras(e.target.value);
+                  if (errors.horasExtras) setErrors((p) => ({ ...p, horasExtras: undefined }));
+                }}
+                error={errors.horasExtras}
+                optional
+              />
+            </div>
+            <div className="flex-1">
+              <Input
+                label="Tarifa / hora (MXN)"
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value={tarifaHoraExtra}
+                onChange={(e) => {
+                  setTarifaHoraExtra(e.target.value);
+                  if (errors.tarifaHoraExtra) setErrors((p) => ({ ...p, tarifaHoraExtra: undefined }));
+                }}
+                error={errors.tarifaHoraExtra}
+                optional
+              />
+            </div>
+          </div>
+          {montoHorasExtras > 0 && (
+            <div className="text-xs text-purple-700 space-y-0.5">
+              <p>Horas extras: <span className="font-semibold">{formatCurrency(montoHorasExtras)}</span></p>
+              <p>Total a pagar: <span className="font-bold text-sm">{formatCurrency(totalGuardado)}</span></p>
+            </div>
           )}
         </div>
       )}

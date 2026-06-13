@@ -35,12 +35,17 @@ export default function EditarEgresoPage() {
             fecha: dateToInputValue(egreso.fecha.toDate()),
             categoria: egreso.categoria,
             subcategoria: egreso.subcategoria,
-            // Si el ticket era USD, mostrar el monto original en dólares
-            monto: egreso.moneda === 'USD' && egreso.monto_usd ? egreso.monto_usd : egreso.monto,
+            // Si el ticket era USD, mostrar el monto original en dólares.
+            // Para Sueldos, mostrar el sueldo base (sin horas extras).
+            monto: egreso.moneda === 'USD' && egreso.monto_usd
+              ? egreso.monto_usd
+              : egreso.monto - (egreso.monto_horas_extras ?? 0),
             notas: egreso.notas ?? '',
             imagen_url: egreso.imagen_url,
             moneda: egreso.moneda,
             tipo_cambio: egreso.tipo_cambio,
+            horas_extras: egreso.horas_extras,
+            tarifa_hora_extra: egreso.tarifa_hora_extra,
           }}
         />
       )}

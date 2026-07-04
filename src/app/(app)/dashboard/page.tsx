@@ -11,9 +11,11 @@ import { SummaryCards } from '@/components/dashboard/SummaryCards';
 import { WeeklyChart } from '@/components/dashboard/WeeklyChart';
 import { PaymentMethodBreakdown } from '@/components/dashboard/PaymentMethodBreakdown';
 import { MonthlyTotals } from '@/components/dashboard/MonthlyTotals';
+import { BreakdownPanel } from '@/components/dashboard/BreakdownPanel';
 import { Spinner } from '@/components/ui/Spinner';
 import { getCurrentWeek, getCurrentYear, getMes } from '@/lib/utils/dates';
 import { MESES } from '@/lib/utils/constants';
+import type { MetodoPago, CategoriaEgreso } from '@/types';
 import { signOut } from '@/lib/firebase/auth';
 import { useRouter } from 'next/navigation';
 
@@ -32,7 +34,11 @@ export default function DashboardPage() {
 
   const mesStats = stats.monthlyTotals.find((m) => m.mes === selectedMes) ?? {
     ingresos: 0, egresos: 0, utilidad: 0,
+    ingresosPorMetodo: { Efectivo: 0, Transferencia: 0, Rappi: 0 } as Record<MetodoPago, number>,
+    egresosPorCategoria: { 'Gastos Insumos': 0, 'Sueldos': 0, 'Gastos Fijos': 0 } as Record<CategoriaEgreso, number>,
   };
+
+  const currentWeekData = stats.weeklyChartData[stats.weeklyChartData.length - 1];
 
   const periodoStats = viewMode === 'mes'
     ? { ingresos: mesStats.ingresos, egresos: mesStats.egresos, utilidad: mesStats.utilidad }
@@ -117,6 +123,30 @@ export default function DashboardPage() {
           />
 
           {viewMode === 'semana' && <WeeklyChart data={stats.weeklyChartData} />}
+          {viewMode === 'semana' && currentWeekData && (
+            <BreakdownPanel
+              ingresosPorMetodo={{
+                Efectivo: currentWeekData.efectivo,
+                Transferencia: currentWeekData.transferencia,
+                Rappi: currentWeekData.rappi,
+              }}
+              egresosPorCategoria={{
+                'Gastos Insumos': currentWeekData.gastosInsumos,
+                'Sueldos': currentWeekData.sueldos,
+                'Gastos Fijos': currentWeekData.gastosFijos,
+              }}
+              totalIngresos={stats.currentWeekIngresos}
+              totalEgresos={stats.currentWeekEgresos}
+            />
+          )}
+          {viewMode === 'mes' && (
+            <BreakdownPanel
+              ingresosPorMetodo={mesStats.ingresosPorMetodo}
+              egresosPorCategoria={mesStats.egresosPorCategoria}
+              totalIngresos={mesStats.ingresos}
+              totalEgresos={mesStats.egresos}
+            />
+          )}
           <PaymentMethodBreakdown data={stats.paymentMethodData} />
           <MonthlyTotals data={stats.monthlyTotals} />
 

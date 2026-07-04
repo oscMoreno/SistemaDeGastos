@@ -59,6 +59,12 @@ export interface WeeklyChartPoint {
   label: string;
   ingresos: number;
   egresos: number;
+  efectivo: number;
+  transferencia: number;
+  rappi: number;
+  gastosInsumos: number;
+  sueldos: number;
+  gastosFijos: number;
 }
 
 export interface PaymentMethodPoint {
@@ -72,6 +78,8 @@ export interface MonthlyTotal {
   ingresos: number;
   egresos: number;
   utilidad: number;
+  ingresosPorMetodo: Record<MetodoPago, number>;
+  egresosPorCategoria: Record<CategoriaEgreso, number>;
 }
 
 /** Resumen semana por semana (vista tipo Excel original) */
